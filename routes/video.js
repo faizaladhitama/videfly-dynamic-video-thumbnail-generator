@@ -4,6 +4,7 @@ const fs = require('fs');
 const { v4: uuidv4 } = require("uuid");
 const { Readable } = require('stream');
 const ffmpeg = require('fluent-ffmpeg');
+const nodeCache = require('node-cache');
 
 var router = express.Router();
 
@@ -26,13 +27,37 @@ const generateThumbnails = (videoPath, outputFolder) => {
         try {
           // Get the list of generated thumbnail files
           const files = fs.readdirSync(outputFolder);
-          const thumbnails = files.map((file) => `${outputFolder}/${file}`);
+          const baseUrl = "localhost:3000";
+          const thumbnails = files.map((file) => {
+            return {
+              "relativePath": `${outputFolder}/${file}`,
+              "url": `${baseUrl}/${outputFolder}/${file}`
+            }
+          });
           resolve(thumbnails);
         } catch (error) {
           reject(error);
         }
       })
       .on("error", reject);
+  });
+};
+
+// Utility: Generate Thumbnails
+const generateAnimatedThumbnails = (thumbnailFolder, outputFolder) => {
+  return new Promise((resolve, reject) => {
+    ffmpeg()
+    .input(`${thumbnailFolder}/thumbnail-%1d.png`)
+    .save(`${outputFolder}/thumbnail.mp4`)
+    .on('end', () => {
+      console.log("done");
+      const baseUrl = "localhost:3000";
+      resolve({
+        "relativePath": `${outputFolder}/thumbnail.mp4`,
+        "url": `${baseUrl}/${outputFolder}/thumbnail.mp4`
+      })
+    })
+    .on("error", reject);
   });
 };
 
@@ -72,10 +97,11 @@ router.get("/thumbnails", async (req, res) => {
   const basePath = `./uploads/${uuid}`;
   const videoPath = `${basePath}/video/${uuid}.mp4`;
   const thumbnailPath = `${basePath}/thumbnails`;
+  const animatedThumbnailPath = `${basePath}/animated-thumbnails`;
 
   try {
     // Create necessary directories in parallel
-    await createDirectories([`${basePath}/video`, thumbnailPath]);
+    await createDirectories([`${basePath}/video`, thumbnailPath, animatedThumbnailPath]);
 
     // Download the video
     console.log("Downloading video...");
@@ -84,9 +110,10 @@ router.get("/thumbnails", async (req, res) => {
     // Generate thumbnails
     console.log("Generating thumbnails...");
     const thumbnails = await generateThumbnails(videoPath, thumbnailPath);
+    const animatedThumbnails = await generateAnimatedThumbnails(thumbnailPath, animatedThumbnailPath);
 
     // Respond with list of thumbnail paths
-    res.json({ thumbnails });
+    res.json({ thumbnails, animatedThumbnails });
   } catch (error) {
     console.error("Error processing request:", error);
     res.status(500).json({ error: "Internal server error." });
