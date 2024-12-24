@@ -1,6 +1,6 @@
 {
-  "name": "videfly",
-  "version": "0.0.0",
+  "name": "videfly-thumbnail-generator",
+  "version": "0.0.1",
   "private": true,
   "scripts": {
     "start": "node ./bin/www"
@@ -9,6 +9,7 @@
     "@distube/ytdl-core": "^4.15.8",
     "cookie-parser": "~1.4.4",
     "debug": "~2.6.9",
+    "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "fluent-ffmpeg": "^2.1.3",
     "morgan": "~1.9.1",

@@ -8,7 +8,7 @@ const NodeCache = require("node-cache");
 
 const router = express.Router();
 const thumbnailCache = new NodeCache({ stdTTL: process.env.THUMBNAIL_CACHE_TTL || 3600}); // Cache for 1 hour
-const BASE_URL = process.env.BASE_URL || "http://localhost:3000"; // Configurable base URL
+const baseURL = process.env.BASE_URL || "http://localhost:3000"; // Configurable base URL
 
 // Utility: Create directories synchronously if they don't exist
 const ensureDirectoriesSync = (paths) => {
@@ -32,7 +32,7 @@ const generateThumbnails = (videoPath, outputFolder) => {
         try {
           const thumbnails = fs.readdirSync(outputFolder).map((file) => ({
             relativePath: `${outputFolder}/${file}`,
-            url: `${BASE_URL}/${outputFolder}/${file}`,
+            url: `${baseURL}/${outputFolder}/${file}`,
           }));
           resolve(thumbnails);
         } catch (error) {
@@ -53,7 +53,7 @@ const generateAnimatedThumbnails = (thumbnailFolder, outputFolder) => {
       .on("end", () => {
         resolve({
           relativePath: animatedThumbnailPath,
-          url: `${BASE_URL}/${animatedThumbnailPath}`,
+          url: `${baseURL}/${animatedThumbnailPath}`,
         });
       })
       .on("error", reject);

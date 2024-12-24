@@ -7,6 +7,12 @@
 var app = require('../app');
 var debug = require('debug')('videfly:server');
 var http = require('http');
+var {info} = require('console');
+
+
+require('dotenv').config({
+  path: `.env.${process.env.NODE_ENV || "local"}`
+});
 
 /**
  * Get port from environment and store in Express.
@@ -86,5 +92,5 @@ function onListening() {
   var bind = typeof addr === 'string'
     ? 'pipe ' + addr
     : 'port ' + addr.port;
-  debug('Listening on ' + bind);
+  info('Listening on ' + bind);
 }
