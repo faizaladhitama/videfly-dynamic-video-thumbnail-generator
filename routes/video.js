@@ -7,98 +7,89 @@ const ffmpeg = require('fluent-ffmpeg');
 
 var router = express.Router();
 
-var generateThumbnails = (videoPath, uuid) => {
+// Utility: Create directories in parallel
+const createDirectories = async (paths) => {
+  const creationTasks = paths.map((path) => fs.mkdirSync(path, { recursive: true }));
+  await Promise.all(creationTasks);
+};
+
+// Utility: Generate Thumbnails
+const generateThumbnails = (videoPath, outputFolder) => {
   return new Promise((resolve, reject) => {
     ffmpeg(videoPath)
       .screenshots({
         count: 10,
-        folder: `./uploads/${uuid}/thumbnails/`,
+        folder: outputFolder,
+        filename: "thumbnail-%i.png",
       })
-      .on("end", resolve)
-      .on("error", (error) => {
-        console.error("Failed to generate thumbnails:", error);
-        reject(error);
-      });
+      .on("end", async () => {
+        try {
+          // Get the list of generated thumbnail files
+          const files = fs.readdirSync(outputFolder);
+          const thumbnails = files.map((file) => `${outputFolder}/${file}`);
+          resolve(thumbnails);
+        } catch (error) {
+          reject(error);
+        }
+      })
+      .on("error", reject);
   });
 };
 
-var createDirectory = (path) => {
-  fs.mkdir(path, { recursive: true }, (error) => {
-    if (error) {
-      console.error(`Failed to create directory at ${path}:`, error);
-    }
-  });
+// Utility: Download Video
+const downloadVideo = async (url, videoPath, type) => {
+  if (type === "youtube") {
+    return new Promise((resolve, reject) => {
+      const stream = ytdl(url).pipe(fs.createWriteStream(videoPath));
+      stream.on("finish", resolve);
+      stream.on("error", reject);
+    });
+  } else if (type === "file") {
+    const response = await fetch(url);
+    const readable = Readable.fromWeb(response.body);
+    return new Promise((resolve, reject) => {
+      const stream = fs.createWriteStream(videoPath);
+      readable.pipe(stream);
+      stream.on("finish", resolve);
+      stream.on("error", reject);
+    });
+  }
+  throw new Error("Invalid type specified.");
 };
 
-
-/* GET users listing. */
+// Route: /thumbnails
 router.get("/thumbnails", async (req, res) => {
   const { url, type } = req.query;
 
   if (!url) {
-    res.status(400).send("URL is null or undefined.");
-    return;
+    return res.status(400).json({ error: "URL is null or undefined." });
   }
-
   if (!type) {
-    res.status(400).send("Type is null or undefined.");
-    return;
+    return res.status(400).json({ error: "Type is null or undefined." });
   }
-
-  console.log(`url: ${url}, type: ${type}`);
 
   const uuid = uuidv4();
-  const videoPath = `./uploads/${uuid}/video/${uuid}.mp4`;
+  const basePath = `./uploads/${uuid}`;
+  const videoPath = `${basePath}/video/${uuid}.mp4`;
+  const thumbnailPath = `${basePath}/thumbnails`;
 
   try {
-    // Create necessary directories
-    await createDirectory(`./uploads/${uuid}/video`);
-    await createDirectory(`./uploads/${uuid}/thumbnails`);
+    // Create necessary directories in parallel
+    await createDirectories([`${basePath}/video`, thumbnailPath]);
 
-    if (type === "youtube") {
-      const videoStream = ytdl(url);
-      const fileStream = fs.writeFile(videoPath);
-      videoStream.pipe(fileStream);
+    // Download the video
+    console.log("Downloading video...");
+    await downloadVideo(url, videoPath, type);
 
-      videoStream.on("end", async () => {
-        try {
-          await generateThumbnails(videoPath, uuid);
-          res.send("Thumbnails generated successfully.");
-        } catch (error) {
-          res.status(500).send("Error generating thumbnails.");
-        }
-      });
+    // Generate thumbnails
+    console.log("Generating thumbnails...");
+    const thumbnails = await generateThumbnails(videoPath, thumbnailPath);
 
-      videoStream.on("error", (error) => {
-        console.error("Error downloading video:", error);
-        res.status(500).send("Failed to download YouTube video.");
-      });
-    } else if (type === "file") {
-      const response = await fetch(url);
-      const readable = Readable.fromWeb(response.body);
-      const fileStream = fs.createWriteStream(videoPath);
-
-      readable.pipe(fileStream);
-
-      fileStream.on("finish", async () => {
-        try {
-          await generateThumbnails(videoPath, uuid);
-          res.send("Thumbnails generated successfully.");
-        } catch (error) {
-          res.status(500).send("Error generating thumbnails.");
-        }
-      });
-
-      fileStream.on("error", (error) => {
-        console.error("Error saving file:", error);
-        res.status(500).send("Failed to save the file.");
-      });
-    } else {
-      res.status(400).send("Invalid type specified.");
-    }
+    // Respond with list of thumbnail paths
+    res.json({ thumbnails });
   } catch (error) {
-    console.error("Error:", error);
-    res.status(500).send("Internal server error.");
+    console.error("Error processing request:", error);
+    res.status(500).json({ error: "Internal server error." });
   }
 });
 
