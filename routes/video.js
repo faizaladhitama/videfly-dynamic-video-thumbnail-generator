@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require("uuid");
 const { Readable } = require("stream");
 const ffmpeg = require("fluent-ffmpeg");
 const NodeCache = require("node-cache");
+const path = require('path');
 
 const router = express.Router();
 const thumbnailCache = new NodeCache({ stdTTL: process.env.THUMBNAIL_CACHE_TTL || 3600}); // Cache for 1 hour
@@ -13,8 +14,13 @@ const baseURL = process.env.BASE_URL || "http://localhost:3000"; // Configurable
 // Utility: Create directories synchronously if they don't exist
 const ensureDirectoriesSync = (paths) => {
   for (const path of paths) {
-    if (!fs.existsSync(path)) {
-      fs.mkdirSync(path, { recursive: true });
+    try {
+      if (!fs.existsSync(path)) {
+        fs.mkdirSync(path, { recursive: true });
+      }
+    } catch (error) {
+      console.error(`Failed to create directory: ${path}`, error);
+      throw error;
     }
   }
 };
@@ -105,15 +111,15 @@ router.get("/thumbnails", (req, res) => {
   }
 
   const uuid = uuidv4();
-  const basePath = `/uploads/${uuid}`;
-  const videoPath = `${basePath}/video/${uuid}.mp4`;
-  const thumbnailPath = `${basePath}/thumbnails`;
-  const animatedThumbnailPath = `${basePath}/animated-thumbnails`;
+  const basePath = path.join("uploads", uuid);
+  const videoPath = path.join(basePath, "video", `${uuid}.mp4`);
+  const thumbnailPath = path.join(basePath, "thumbnails");
+  const animatedThumbnailPath = path.join(basePath, "animated-thumbnails");
 
   try {
     // Ensure directories synchronously
     console.log("Ensuring directories...");
-    ensureDirectoriesSync([`${basePath}/video`, thumbnailPath, animatedThumbnailPath]);
+    ensureDirectoriesSync([path.join(basePath, "video"), thumbnailPath, animatedThumbnailPath]);
 
     // Download video synchronously
     console.log("Downloading video...");
